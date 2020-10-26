@@ -40,3 +40,10 @@ for file in $(ag -i -l "${SEARCH_REGEX}"); do
     sed -i '' -E -e "${regex}" "${file}"
   done
 done
+
+echo "=== Custom Changes ==="
+cd "src/main/java/com/canva/protogen/servicepluginconfig"
+for file in $(ag -i -l 'return.+"Server";'); do
+  echo "${file}"
+  sed -i '' -E -e 's/return(.+)"Server";/return\1"Router";/g' "${file}"
+done
