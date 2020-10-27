@@ -3,7 +3,8 @@ set -eu -o pipefail
 
 # case insensitive
 SEARCH_REGEX='api(\s*|.)server'
-SED_REPLACEMENTS=('s/([Aa])([Pp])([Ii])(.?)server/\1\2\3\4router/g' 's/([Aa])([Pp])([Ii])(.?)Server/\1\2\3\4Router/g')
+SED_REPLACEMENTS=('s/([Aa][Pp][Ii].?)server/\1router/g' 's/([Aa][Pp][Ii].?)Server/\1Router/g')
+SEARCH_DIR=~/work/canva
 
 mv_file() {
   file="$1"
@@ -21,7 +22,7 @@ mv_file() {
   git mv "${file}" "${out_file}"
 }
 
-cd ~/work/protogen
+cd "${SEARCH_DIR}"
 
 echo "=== Folder renames ==="
 for file in $(find . -type d | egrep -i "${SEARCH_REGEX}"); do
@@ -42,7 +43,7 @@ for file in $(ag -i -l "${SEARCH_REGEX}"); do
 done
 
 echo "=== Custom Changes ==="
-cd "src/main/java/com/canva/protogen/servicepluginconfig"
+cd "${SEARCH_DIR}/src/main/java/com/canva/protogen/servicepluginconfig"
 for file in $(ag -i -l 'return.+"Server";'); do
   echo "${file}"
   sed -i '' -E -e 's/return(.+)"Server";/return\1"Router";/g' "${file}"
