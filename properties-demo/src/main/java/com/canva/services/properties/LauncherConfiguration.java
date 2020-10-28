@@ -10,6 +10,9 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Arrays;
+import java.util.List;
+
 @Configuration
 public class LauncherConfiguration {
 
@@ -19,7 +22,10 @@ public class LauncherConfiguration {
     var context = new AnnotationConfigApplicationContext(LauncherConfiguration.class);
     AppConfiguration configuration = context.getBean(AppConfiguration.class);
     System.out.println(configuration);
-    System.out.println("");
+
+    int[] numbers = {4, 3, 1, 2};
+    context.getBean(ArraySorter.class).sort(numbers);
+    System.out.println(Arrays.toString(numbers));
   }
 
 

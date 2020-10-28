@@ -13,13 +13,13 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 public class AppConfiguration {
-  private final String accessToken;
-  private final List<URI> corsOrigins;
-  private final int port;
-  private final Duration connectionTimeout;
-  private final Pattern allowedFrameAncestors;
+  public final String accessToken;
+  public final List<URI> corsOrigins;
+  public final int port;
+  public final Duration connectionTimeout;
+  public final Pattern allowedFrameAncestors;
   @Nullable
-  private final String optionalDescription;
+  public final String optionalDescription;
 
 
   AppConfiguration(String accessToken, List<URI> corsOrigins, int port, Duration connectionTimeout,
