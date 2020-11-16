@@ -6,30 +6,20 @@ import com.canva.services.properties.sort.ArraySorter;
 import com.canva.services.properties.sort.NoOpSort;
 import com.canva.services.properties.sort.QuickSort;
 
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.Arrays;
-import java.util.List;
+import org.springframework.context.annotation.Profile;
 
 @Configuration
 public class LauncherConfiguration {
 
-  public static void main(String[] args) {
-    System.setProperty("spring.profiles.active", System.getProperty("flavor"));
-
-    var context = new AnnotationConfigApplicationContext(LauncherConfiguration.class);
-    AppConfiguration configuration = context.getBean(AppConfiguration.class);
-    System.out.println(configuration);
-
-    int[] numbers = {4, 3, 1, 2};
-    context.getBean(ArraySorter.class).sort(numbers);
-    System.out.println(Arrays.toString(numbers));
+  @Bean
+  public GreetingService greetingService() {
+    return new GreetingService();
   }
 
-
-  @DevConfiguration
+  @Configuration
+  @Profile("dev")
   static class DevAppConfig {
     @Bean
     AppConfiguration appConfiguration() {
