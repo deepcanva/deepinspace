@@ -42,6 +42,13 @@
       <version>2.8.6</version>
     </dependency>
 
+    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-lambda -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk-lambda</artifactId>
+      <version>${aws.version}</version>
+    </dependency>
+
   </dependencies>
 
   <build>

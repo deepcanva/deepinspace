@@ -7,9 +7,8 @@ import com.amazonaws.auth.profile.internal.BasicProfile;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
-import com.amazonaws.services.kinesis.model.PutRecordsRequest;
-import com.amazonaws.services.kinesis.model.PutRecordsRequestEntry;
-import com.amazonaws.services.kinesis.model.PutRecordsResult;
+import com.amazonaws.services.kinesis.model.*;
+import com.amazonaws.services.lambda.AWSLambda;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
 import com.amazonaws.services.securitytoken.model.Credentials;
@@ -32,6 +31,15 @@ public class App {
         var credentialsProvider = createCredentialProvider("identity", "dev");
 
         return AmazonKinesisClientBuilder.standard()
+                .withCredentials(credentialsProvider)
+                .withRegion(Regions.US_EAST_1)
+                .build();
+    }
+
+    public static AWSLambda getLambdaClient() {
+        var credentialsProvider = createCredentialProvider("identity", "dev");
+
+        return AWSLambdaClientBuilder.standard()
                 .withCredentials(credentialsProvider)
                 .withRegion(Regions.US_EAST_1)
                 .build();
@@ -68,6 +76,40 @@ public class App {
         return roleResult.getCredentials();
     }
 
+    private CreateFunctionResult createLambdaFunction(AWSLambda lambdaClient) {
+        CreateFunctionRequest request = new CreateFunctionRequest()
+                .withFunctionName("deep-consumer")
+                .withRuntime("java11")
+                //replace with the actual arn of the execution role you created
+                .withRole("")
+                //is of the form of the name of your source file and then name of your function handler
+                .withHandler("ProcessKinesisRecords.handleRequest");
+//                .withCode(new FunctionCode())
+//                .withDescription("")
+//                .withTimeout(15)
+//                .withMemorySize(128)
+//                .withPublish(true)
+//                .withVpcConfig(new VpcConfig());
+        CreateFunctionResult response = lambdaClient.createFunction(request);
+
+        // TODO(yolanda): configure kinesis stream to trigger the lambda with event source mapping
+
+        return response;
+    }
+
+//    private void registerLambdaConsumer(AmazonKinesis kinesisClient) {
+//        RegisterStreamConsumerRequest streamConsumerRequest = new RegisterStreamConsumerRequest();
+//        streamConsumerRequest.setConsumerName("deep-consumer");
+//        streamConsumerRequest.setStreamARN();
+//
+//        RegisterStreamConsumerResult result = kinesisClient.registerStreamConsumer(streamConsumerRequest);
+//        // Pass consumer ARN to call subscribeToShard on resulting consumer and start listening
+//
+//        SubscribeToShardRequest shardRequest = SubscribeToShardRequest.build()
+//                .consumerARN()
+//                .shardId()
+//                .startingPosition(s -> s.type(ShardIteratorType.LATEST)).build();
+//    }
 
     public static void main(String[] args) throws InterruptedException {
         AmazonKinesis kinesisClient = getKinesisClient();
@@ -76,6 +118,13 @@ public class App {
         app.populateProductList();
         //1. get client
         app.sendData(kinesisClient);
+
+        // 5. Get lambda client
+        AWSLambda lambdaClient = getLambdaClient();
+
+        // 6. Create lambda function to consume kinesis stream
+        CreateFunctionResult = app.createLambdaFunction(lambdaClient);
+
     }
 
     private void sendData(AmazonKinesis kinesisClient) {
@@ -127,6 +176,4 @@ public class App {
         productList.add("jeans);");
         productList.add("belt");
     }
-
-
 }
