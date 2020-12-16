@@ -4,7 +4,7 @@ set -eu -o pipefail
 # case insensitive
 SEARCH_REGEX='api(\s*|.)server'
 SED_REPLACEMENTS=('s/([Aa][Pp][Ii].?)server/\1router/g' 's/([Aa][Pp][Ii].?)Server/\1Router/g')
-SEARCH_DIR=~/work/canva
+SEARCH_DIR=~/work/protogen
 
 mv_file() {
   file="$1"
@@ -25,12 +25,12 @@ mv_file() {
 cd "${SEARCH_DIR}"
 
 echo "=== Folder renames ==="
-for file in $(find . -type d | egrep -i "${SEARCH_REGEX}"); do
+for file in $(find . -type d | egrep -v '\.git' | egrep -i "${SEARCH_REGEX}"); do
   mv_file "${file}"
 done
 
 echo && echo "=== File renames ==="
-for file in $(find . -type f | egrep -i "${SEARCH_REGEX}"); do
+for file in $(find . -type f | egrep -v '\.git' | egrep -i "${SEARCH_REGEX}"); do
   mv_file "${file}"
 done
 
