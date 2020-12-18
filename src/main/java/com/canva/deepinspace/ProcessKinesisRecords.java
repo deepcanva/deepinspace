@@ -1,19 +1,21 @@
 package com.canva.deepinspace;
 
+// TODO(yolanda): find and fix the dependencies
+import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.amazonaws.services.lambda.runtime.events.KinesisEvent;
-import com.amazonaws.services.lambda.runtime.events.KinesisEvent.KinesisEventRecord;
 
 /**
  * Simple Lambda Function Handler
  */
-public class ProcessKinesisRecords implements RequestHandler<KinesisEvent, Void>{
-    @Override
-    public Void handleRequest(KinesisEvent event, Context context)
+public class ProcessKinesisRecords {
+    // TODO(yolanda): add lambda client? resubscribe to the stream etc???
+
+    public Void handleRecord(SubscribeToShardEvent event, Context context)
     {
-        for(KinesisEventRecord rec : event.getRecords()) {
-            System.out.println(new String(rec.getKinesis().getData().array()));
+        // TODO(yolanda): do some aggregations / processing
+        for(Record rec : event.records()) {
+            System.out.println(rec.data().toString());
         }
         return null;
     }
