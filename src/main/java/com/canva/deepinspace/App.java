@@ -37,49 +37,66 @@ import java.util.concurrent.TimeUnit;
 public class App {
     private List<String> recordList = new ArrayList<>();
     private Random random = new Random();
-    private static StaticCredentialsProvider credentialsProvider = null;
+    private static StaticCredentialsProvider awsCredentialsProvider = null;
     private static Profile assumedRoleProfile = null;
 
     public static KinesisAsyncClient getKinesisClient() {
-        if (credentialsProvider == null) {
-            credentialsProvider = createCredentialProvider("identity", "dev");
+        System.out.println("getKinesisClient: start"); //DEBUG
+
+        if (awsCredentialsProvider == null) {
+            awsCredentialsProvider = createCredentialProvider("identity", "dev");
         }
 
         // TODO(yolanda): not compatible with AWSStaticCredentialsProvider in Version1, StaticCredentialsProvider in Version2
         // none of the authentication classes carry over ... need to reconstruct the whole thing
         return KinesisAsyncClient.builder()
-                .credentialsProvider(credentialsProvider)
+                .credentialsProvider(awsCredentialsProvider)
                 .region(Region.US_EAST_1)
                 .build();
     }
 
     public static LambdaClient getLambdaClient() {
-        if (credentialsProvider == null) {
-            credentialsProvider = createCredentialProvider("identity", "dev");
+        System.out.println("getLambdaClient: start"); //DEBUG
+
+        if (awsCredentialsProvider == null) {
+            awsCredentialsProvider = createCredentialProvider("identity", "dev");
         }
 
         return LambdaClient.builder()
-                .credentialsProvider(credentialsProvider)
+                .credentialsProvider(awsCredentialsProvider)
                 .region(Region.US_EAST_1)
                 .build();
     }
 
     private static StaticCredentialsProvider createCredentialProvider(String baseProfile, String assumedProfile) {
-        var profilesFile = ProfileFile.builder().build();
+        System.out.println("createCredentialProvider: start"); //DEBUG
+
+        var profilesFile = ProfileFile.defaultProfileFile();
+        System.out.println("createCredentialProvider: profilesFile"); //DEBUG
         var credentialsProvider = ProfileCredentialsProvider.create(baseProfile); // created with default ProfileFile and baseProfile name
+        System.out.println("createCredentialProvider: credentialsProvider"); //DEBUG
         var credentials = credentialsProvider.resolveCredentials();
+        System.out.printf("createCredentialProvider: credentials %s\n", credentials.toString()); //DEBUG
 
         Map<String, Profile> profiles = profilesFile.profiles();
+        System.out.println(profiles.toString()); //DEBUG
         assumedRoleProfile = profiles.get(assumedProfile); // save role profile to create aws lambda function
         if (assumedRoleProfile == null) {
+            System.out.println("createCredentialProvider: ERROR"); //DEBUG
             throw new IllegalStateException("Could not find role profile '" + assumedProfile
                     + "' in config file; options are: " + profiles.keySet());
         }
+        System.out.printf("createCredentialProvider: getAssumedRoleProfile %s\n", assumedRoleProfile.toString()); //DEBUG
+
         Credentials assumedCredentials = assumeProfile(assumedRoleProfile, StaticCredentialsProvider.create(credentials));
+        System.out.printf("createCredentialProvider: assumedCredentials %s\n", assumedCredentials.toString()); //DEBUG
+
         return StaticCredentialsProvider.create(AwsSessionCredentials.create(assumedCredentials.accessKeyId(), assumedCredentials.secretAccessKey(), assumedCredentials.sessionToken()));
     }
 
     static Credentials assumeProfile(Profile basicProfile, AwsCredentialsProvider identityCredentialProvider) {
+        System.out.println("assumeProfile: start"); //DEBUG
+
         var sts = StsClient.builder()
                 .region(Region.of(basicProfile.property(ProfileProperty.REGION).get()))
                 .credentialsProvider(identityCredentialProvider)
@@ -129,6 +146,8 @@ public class App {
     // END VERSION 1 AWS CREDENTIALS DEPRECATE
 
     private CreateFunctionResponse createLambdaFunction(LambdaClient lambdaClient) {
+        System.out.println("createLambdaFunction: Start"); //DEBUG
+
         CreateFunctionRequest request = CreateFunctionRequest.builder()
                 .functionName("deep-consumer")
                 .runtime("java11")
@@ -142,6 +161,8 @@ public class App {
 
     // TODO(yolanda): configure kinesis stream to register consumer and subscribe to shard
     private void registerLambdaConsumer(KinesisAsyncClient kinesisClient, LambdaClient lambdaClient, CreateFunctionResponse lambdaFunctionResult) throws ExecutionException, InterruptedException {
+        System.out.println("registerLambdaConsumer: start"); //DEBUG
+
         // Kinesis stream description
         DescribeStreamRequest kinesisStreamRequest = DescribeStreamRequest.builder()
                 .streamName("deep-stream")
@@ -181,11 +202,15 @@ public class App {
     }
 
     public static void main(String[] args) throws InterruptedException, ExecutionException {
+        System.out.println("Success: Main begun execution!"); //DEBUG
+
         // 1. Get kinesis producer client and send data
         KinesisAsyncClient kinesisClient = getKinesisClient();
         App app = new App();
         app.populateRecordList();
         app.sendData(kinesisClient);
+        System.out.println("Main: kinesis data is sent, setting up lambda consumer"); //DEBUG
+
 
         // 5. Get lambda consumer client
         LambdaClient lambdaClient = getLambdaClient();
@@ -196,10 +221,12 @@ public class App {
         // 7. Subscribe lambda function to consume from kinesis stream
         app.registerLambdaConsumer(kinesisClient, lambdaClient, lambdaFunctionResult);
 
-        System.out.println("Success: Main finished execution!");
+        System.out.println("Success: Main finished execution!"); //DEBUG
     }
 
     private void sendData(KinesisAsyncClient kinesisClient) throws ExecutionException, InterruptedException {
+        System.out.println("sendData: start"); //DEBUG
+
         //2. PutRecordRequest
         PutRecordsRequest recordsRequest = PutRecordsRequest.builder()
                 .streamName("deep-stream")
@@ -217,6 +244,8 @@ public class App {
     }
 
     private List<PutRecordsRequestEntry> getRecordsRequestList() {
+        System.out.println("getRecordsRequestList: start"); //DEBUG
+
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         List<PutRecordsRequestEntry> putRecordsRequestEntries = new ArrayList<>();
         for (Record record : getRecordList()) {
@@ -226,10 +255,13 @@ public class App {
                     .build();
             putRecordsRequestEntries.add(requestEntry);
         }
+
         return putRecordsRequestEntries;
     }
 
     private List<Record> getRecordList(){
+        System.out.println("getRecordList: start"); //DEBUG
+
         List<Record> records = new ArrayList<>();
         for(int i=0;i<500;i++){
             Record record = new Record();
@@ -238,6 +270,7 @@ public class App {
             record.setStatus("5xx");
             records.add(record);
         }
+
         return records;
     }
 
