@@ -1,24 +1,30 @@
 package com.canva.deepinspace;
 
-import com.amazonaws.auth.*;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.auth.profile.ProfilesConfigFile;
-import com.amazonaws.auth.profile.internal.BasicProfile;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
-import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
-import com.amazonaws.services.securitytoken.model.Credentials;
+// Version 1 AWS Credentials Deprecated
+//import com.amazonaws.auth.*;
+//import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+//import com.amazonaws.auth.profile.ProfilesConfigFile;
+//import com.amazonaws.auth.profile.internal.BasicProfile;
+//import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
+//import com.amazonaws.services.securitytoken.model.AssumeRoleRequest;
+//import com.amazonaws.services.securitytoken.model.Credentials;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.canva.deepinspace.model.Record;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.*;
+import software.amazon.awssdk.profiles.Profile;
+import software.amazon.awssdk.profiles.ProfileFile;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.profiles.ProfileProperty;
 import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.*;
 import software.amazon.awssdk.services.lambda.LambdaClient;
 import software.amazon.awssdk.services.lambda.model.CreateFunctionRequest;
 import software.amazon.awssdk.services.lambda.model.CreateFunctionResponse;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
+import software.amazon.awssdk.services.sts.model.Credentials;
 
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -31,68 +37,103 @@ import java.util.concurrent.TimeUnit;
 public class App {
     private List<String> recordList = new ArrayList<>();
     private Random random = new Random();
-    private static AWSStaticCredentialsProvider awsCredentialsProvider = null;
-    private static BasicProfile assumedRoleProfile = null;
+    private static StaticCredentialsProvider credentialsProvider = null;
+    private static Profile assumedRoleProfile = null;
 
     public static KinesisAsyncClient getKinesisClient() {
-        if (awsCredentialsProvider == null) {
-            awsCredentialsProvider = createCredentialProvider("identity", "dev");
+        if (credentialsProvider == null) {
+            credentialsProvider = createCredentialProvider("identity", "dev");
         }
 
+        // TODO(yolanda): not compatible with AWSStaticCredentialsProvider in Version1, StaticCredentialsProvider in Version2
+        // none of the authentication classes carry over ... need to reconstruct the whole thing
         return KinesisAsyncClient.builder()
-                .credentialsProvider((AwsCredentialsProvider) awsCredentialsProvider)
+                .credentialsProvider(credentialsProvider)
                 .region(Region.US_EAST_1)
                 .build();
     }
 
     public static LambdaClient getLambdaClient() {
-        if (awsCredentialsProvider == null) {
-            awsCredentialsProvider = createCredentialProvider("identity", "dev");
+        if (credentialsProvider == null) {
+            credentialsProvider = createCredentialProvider("identity", "dev");
         }
 
         return LambdaClient.builder()
-                .credentialsProvider((AwsCredentialsProvider) awsCredentialsProvider)
+                .credentialsProvider(credentialsProvider)
                 .region(Region.US_EAST_1)
                 .build();
     }
 
-    private static AWSStaticCredentialsProvider createCredentialProvider(String baseProfile, String assumedProfile) {
-        var profilesConfigFile = new ProfilesConfigFile();
-        var credentialsProvider = new ProfileCredentialsProvider(profilesConfigFile, baseProfile);
-        var credentials = credentialsProvider.getCredentials();
+    private static StaticCredentialsProvider createCredentialProvider(String baseProfile, String assumedProfile) {
+        var profilesFile = ProfileFile.builder().build();
+        var credentialsProvider = ProfileCredentialsProvider.create(baseProfile); // created with default ProfileFile and baseProfile name
+        var credentials = credentialsProvider.resolveCredentials();
 
-        Map<String, BasicProfile> basicProfiles = profilesConfigFile.getAllBasicProfiles();
-        assumedRoleProfile = basicProfiles.get(assumedProfile); // save role profile to create aws lambda function
+        Map<String, Profile> profiles = profilesFile.profiles();
+        assumedRoleProfile = profiles.get(assumedProfile); // save role profile to create aws lambda function
         if (assumedRoleProfile == null) {
             throw new IllegalStateException("Could not find role profile '" + assumedProfile
-                    + "' in config file; options are: " + basicProfiles.keySet());
+                    + "' in config file; options are: " + profiles.keySet());
         }
-        Credentials assumedCredentials = assumeProfile(assumedRoleProfile, new AWSStaticCredentialsProvider(credentials));
-        return new AWSStaticCredentialsProvider(new BasicSessionCredentials(assumedCredentials.getAccessKeyId(), assumedCredentials.getSecretAccessKey(), assumedCredentials.getSessionToken()));
+        Credentials assumedCredentials = assumeProfile(assumedRoleProfile, StaticCredentialsProvider.create(credentials));
+        return StaticCredentialsProvider.create(AwsSessionCredentials.create(assumedCredentials.accessKeyId(), assumedCredentials.secretAccessKey(), assumedCredentials.sessionToken()));
     }
 
-    static Credentials assumeProfile(BasicProfile basicProfile, AWSCredentialsProvider identityCredentialProvider) {
-        var sts = AWSSecurityTokenServiceClientBuilder.standard()
-                .withRegion(basicProfile.getRegion())
-                .withCredentials(identityCredentialProvider)
+    static Credentials assumeProfile(Profile basicProfile, AwsCredentialsProvider identityCredentialProvider) {
+        var sts = StsClient.builder()
+                .region(Region.of(basicProfile.property(ProfileProperty.REGION).get()))
+                .credentialsProvider(identityCredentialProvider)
                 .build();
 
-        int durationSeconds = Integer.parseInt(basicProfile.getPropertyValue("duration"));
-        AssumeRoleRequest roleRequest = new AssumeRoleRequest() //
-                .withRoleArn(basicProfile.getRoleArn())
-                .withRoleSessionName(basicProfile.getRoleSessionName())
-                .withDurationSeconds(durationSeconds);
+        int durationSeconds = Integer.parseInt(basicProfile.property("duration").get());
+        AssumeRoleRequest roleRequest = AssumeRoleRequest.builder()
+                .roleArn(basicProfile.property(ProfileProperty.ROLE_ARN).get())
+                .roleSessionName(basicProfile.property(ProfileProperty.ROLE_SESSION_NAME).get())
+                .durationSeconds(durationSeconds)
+                .build();
 
         var roleResult = sts.assumeRole(roleRequest);
-        return roleResult.getCredentials();
+        return roleResult.credentials();
     }
+
+    // VERSION 1 AWS CREDENTIALS DEPRECATE
+//    private static AWSStaticCredentialsProvider createCredentialProvider(String baseProfile, String assumedProfile) {
+//        var profilesConfigFile = new ProfilesConfigFile();
+//        var credentialsProvider = new ProfileCredentialsProvider(profilesConfigFile, baseProfile);
+//        var credentials = credentialsProvider.getCredentials();
+//
+//        Map<String, BasicProfile> basicProfiles = profilesConfigFile.getAllBasicProfiles();
+//        assumedRoleProfile = basicProfiles.get(assumedProfile); // save role profile to create aws lambda function
+//        if (assumedRoleProfile == null) {
+//            throw new IllegalStateException("Could not find role profile '" + assumedProfile
+//                    + "' in config file; options are: " + basicProfiles.keySet());
+//        }
+//        Credentials assumedCredentials = assumeProfile(assumedRoleProfile, new AWSStaticCredentialsProvider(credentials));
+//        return new AWSStaticCredentialsProvider(new BasicSessionCredentials(assumedCredentials.getAccessKeyId(), assumedCredentials.getSecretAccessKey(), assumedCredentials.getSessionToken()));
+//    }
+//    static Credentials assumeProfile(BasicProfile basicProfile, AWSCredentialsProvider identityCredentialProvider) {
+//        var sts = AWSSecurityTokenServiceClientBuilder.standard()
+//                .withRegion(basicProfile.getRegion())
+//                .withCredentials(identityCredentialProvider)
+//                .build();
+//
+//        int durationSeconds = Integer.parseInt(basicProfile.getPropertyValue("duration"));
+//        AssumeRoleRequest roleRequest = new AssumeRoleRequest() //
+//                .withRoleArn(basicProfile.getRoleArn())
+//                .withRoleSessionName(basicProfile.getRoleSessionName())
+//                .withDurationSeconds(durationSeconds);
+//
+//        var roleResult = sts.assumeRole(roleRequest);
+//        return roleResult.getCredentials();
+//    }
+    // END VERSION 1 AWS CREDENTIALS DEPRECATE
 
     private CreateFunctionResponse createLambdaFunction(LambdaClient lambdaClient) {
         CreateFunctionRequest request = CreateFunctionRequest.builder()
                 .functionName("deep-consumer")
                 .runtime("java11")
                 // actual arn of the execution role you created
-                .role(assumedRoleProfile.getRoleArn())
+                .role(assumedRoleProfile.property(ProfileProperty.ROLE_ARN).get())
                 // name of your source file and then name of function handler
                 .handler("ProcessKinesisRecords.handleRecord")
                 .build();

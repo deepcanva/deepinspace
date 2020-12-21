@@ -178,7 +178,7 @@ public final class ProcessCredentialsProvider implements AWSCredentialsProvider 
      */
     private DateTime credentialExpirationTime(JsonNode credentialsJson) {
         String expiration = null;//getText(credentialsJson, "Expiration");
-
+        // TODO(yolanda): the json parser for expiration fails, bypass for testing purpose only
         if (expiration != null) {
             DateTime credentialExpiration = new DateTime(DateUtils.parseISO8601Date(expiration));
             credentialExpiration = credentialExpiration.minus(expirationBufferUnit.toMillis(expirationBufferValue));
